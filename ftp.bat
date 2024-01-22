@@ -1,3 +1,3 @@
 python .\ftp.py
-explorer "E:\Code\Proj_Python\FTP\ftp-recv"
+explorer ".\ftp-recv"
 pause
