@@ -46,6 +46,7 @@ def my_print(s, color=None, highlight=False):
 
 
 def get_host_ip():
+    s = None
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(('8.8.8.8', 80))
@@ -55,15 +56,19 @@ def get_host_ip():
     return ip
 
 
-def get_files(path) -> list:
+def get_files(path, is_root=True) -> list:
     file_list = os.listdir(path)
     ret = []
     for file in file_list:
         file_path = os.path.join(path, file)
         if os.path.isdir(file):
-            ret.extend(get_files(file_path))
+            ret.extend(get_files(file_path, False))
         else:
             ret.append(file_path)
+    if is_root:
+        root_length = len(path)
+        for i in range(len(ret)):
+            ret[i] = ret[i][root_length:]
     return ret
 
 
@@ -73,30 +78,36 @@ def send_file(file_path: str, socket_client: socket.socket):
         file_path = file_path[1:-1]
     if file_path.startswith("'") and file_path.endswith("'"):
         file_path = file_path[1:-1]
+    # 正则化路径，统一/符号为\符号
+    file_path = file_path.replace('/', '\\')
+    # 判断传进来的路径是否存在
     if not os.path.exists(file_path):
         my_print(f"[Error] 文件 {file_path} 不存在！", "red", True)
         return
     if os.path.isfile(file_path):
-        # 如果传进来的是个文件
-        file_list = [file_path]
+        # 如果传进来的是个文件，则只获取这个文件的文件名，发送后保存在接受文件夹的根目录下
+        file_list = [os.path.basename(file_path)]
+        root_path = os.path.dirname(file_path)
     else:
-        # 如果传进来的是个文件夹
+        # 如果传进来的是个文件夹，则需要获取整个文件夹的结构，接收方根据文件夹结构保存文件
         file_list = get_files(file_path)
-    for file_path in file_list:
-        # 获取文件名
-        file_name = os.path.basename(file_path)
+        # 为了之后能够正确读取文件，需要把根目录保存
+        root_path = file_path
+    for file_path_relative in file_list:
+        # file_list中保存的都是相对于根目录的路径，需要转换成绝对路径来读取文件
+        file_path_absolute = os.path.join(root_path, file_path_relative)
         # 获取文件大小
-        file_size = os.path.getsize(file_path)
-        # 发送文件名
-        socket_client.sendall(file_name.encode())
+        file_size = os.path.getsize(file_path_absolute)
+        # 发送文件路径，注意这里发送的是相对于根目录的路径
+        socket_client.sendall(file_path_relative.encode())
         socket_client.recv(BUFFER_SIZE)
         # 发送文件大小
         socket_client.sendall(str(file_size).encode())
         socket_client.recv(BUFFER_SIZE)
         # 发送文件内容
-        my_print(f"[Info] 文件 {file_path} 开始发送，大小:{file_size}B。")
-        pbar = tqdm(total=file_size, desc="发送：" + file_name, unit="B", unit_scale=True)
-        with open(file_path, 'rb') as f:
+        my_print(f"[Info] 文件 {file_path_absolute} 开始发送，大小:{file_size}B。")
+        pbar = tqdm(total=file_size, desc="发送：" + file_path_absolute, unit="B", unit_scale=True)
+        with open(file_path_absolute, 'rb') as f:
             while True:
                 data = f.read(BUFFER_SIZE)
                 if not data:
@@ -105,7 +116,7 @@ def send_file(file_path: str, socket_client: socket.socket):
                 pbar.update(len(data))
         socket_client.recv(BUFFER_SIZE)
         pbar.close()
-        my_print(f"[Success] 文件 {file_path} 发送完成。", "green", True)
+        my_print(f"[Success] 文件 {file_path_absolute} 发送完成。", "green", True)
 
 
 def as_client(host: str, port: int):
@@ -141,27 +152,28 @@ def as_client(host: str, port: int):
 
 
 def as_server(host: str, port: int):
+    pbar = None
     socket_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # 创建IPv4，TCP套接字
     socket_server.bind((host, port))
     if not os.path.exists(FOLDER_RECV):
         os.mkdir(FOLDER_RECV)
     file_size = 0
     file_size_recv = 0
-    file_name = ''
-    file_path = ''
+    file_path_relative = ''
+    file_path_absolute = ''
     socket_server.listen(128)
     socket_client, addr = socket_server.accept()
     state = 0
     while True:
         raw_data = socket_client.recv(BUFFER_SIZE)
         if state == 0:
-            file_name = raw_data.decode()
-            if file_name == 'EXIT':
+            file_path_relative = raw_data.decode()
+            if file_path_relative == 'EXIT':
                 socket_client.close()
                 my_print("[Info] 程序退出。", "blue", True)
                 sys.exit(0)
-            file_path = os.path.join(FOLDER_RECV, file_name)
-            my_print(f"[Info] 接收的文件名：{file_name}")
+            file_path_absolute = os.path.join(FOLDER_RECV, file_path_relative)
+            my_print(f"[Info] 接收的文件名：{file_path_relative}")
             socket_client.sendall(b'OK')
             state = 1
         elif state == 1:
@@ -169,16 +181,16 @@ def as_server(host: str, port: int):
             my_print(f"[Info] 接收的文件大小：{file_size}B")
             socket_client.sendall(b'OK')
             if file_size:
-                pbar = tqdm(total=file_size, desc="接收：" + file_name, unit='B', unit_scale=True)
+                pbar = tqdm(total=file_size, desc="接收：" + file_path_relative, unit='B', unit_scale=True)
                 state = 2
             else:
                 # 如果只是一个空文件
-                with open(file_path, 'ab') as f:
+                with open(file_path_absolute, 'ab') as f:
                     f.close()
                 socket_client.sendall(b'OK')
                 state = 0
         elif state == 2:
-            with open(file_path, 'ab') as f:
+            with open(file_path_absolute, 'ab') as f:
                 f.write(raw_data)
             data_size = len(raw_data)
             file_size_recv += data_size
@@ -186,10 +198,10 @@ def as_server(host: str, port: int):
             if file_size_recv == file_size:
                 socket_client.send(b'OK')
                 pbar.close()
-                my_print(f"[Success] 文件 {file_name} 接收完成。", "green", True)
+                my_print(f"[Success] 文件 {file_path_relative} 接收完成。", "green", True)
                 my_print("[Input] 请输入文件路径，0退出程序：", "blue", True)
-                file_name = ''
-                file_path = ''
+                file_path_relative = ''
+                file_path_absolute = ''
                 file_size = 0
                 file_size_recv = 0
                 state = 0
