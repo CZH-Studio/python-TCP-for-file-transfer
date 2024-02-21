@@ -253,7 +253,7 @@ def as_server(host: str, port: int):
             meta_data: dict = pickle.loads(raw_data)
             file_path_relative = meta_data['path']
             if file_path_relative == 'EXIT':
-                socket_client.send(b'OK')
+                socket_client.sendall(b'OK')
                 state = 0
                 continue
             file_path_absolute = os.path.join(FOLDER_RECV, file_path_relative)
@@ -273,6 +273,7 @@ def as_server(host: str, port: int):
                 state = 2
                 # 修改文件元数据
                 os.utime(file_path_absolute, (atime, mtime))
+                my_print(f"[Success] 完成接收:{file_path_absolute}", "green", True)
         elif state == 3:
             # 接收文件内容状态
             # 创建进度条
@@ -292,9 +293,8 @@ def as_server(host: str, port: int):
             # 修改文件元数据
             os.utime(file_path_absolute, (atime, mtime))
             # 恢复初始状态
-            my_print(f"[Success] 完成接收:{file_path_relative}", "green", True)
+            my_print(f"[Success] 完成接收:{file_path_absolute}", "green", True)
             my_print("[Input] 请输入文件路径，0/空退出程序：", "blue", True)
-            file_path_relative = ''
             file_path_absolute = ''
             file_size = 0
             file_size_recv = 0
