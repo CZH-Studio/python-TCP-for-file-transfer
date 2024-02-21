@@ -207,7 +207,6 @@ def as_server(host: str, port: int):
         os.mkdir(FOLDER_RECV)
     file_size = 0
     file_size_recv = 0
-    file_path_relative = ''
     file_path_absolute = ''
     atime = 0
     mtime = 0
@@ -269,7 +268,6 @@ def as_server(host: str, port: int):
                 # 如果只是一个空文件
                 with open(file_path_absolute, 'ab') as f:
                     f.close()
-                socket_client.sendall(b'OK')
                 state = 2
                 # 修改文件元数据
                 os.utime(file_path_absolute, (atime, mtime))
