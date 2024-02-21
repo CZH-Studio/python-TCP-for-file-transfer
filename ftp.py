@@ -160,6 +160,11 @@ def send_file(file_path: str, socket_client: socket.socket):
             pbar.close()
         my_print(f"[Success] 完成发送:{file_path_absolute}", "green", True)
 
+    # 这一次文件发送完成后告诉服务器端
+    meta_data_exit = {"path": "exit"}
+    socket_client.sendall(pickle.dumps(meta_data_exit))
+    socket_client.recv(BUFFER_SIZE)
+
 
 def as_client(host: str, port: int):
     socket_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -243,10 +248,14 @@ def as_server(host: str, port: int):
             socket_client.sendall(b'OK')
             state = 2
         elif state == 2:
-            # 接收文件元数据（是一个字典）
+            # 接收文件元数据（是一个字典），如果文件元数据是退出，则代表当前一次文件传输完成，回到状态0
             raw_data = socket_client.recv(BUFFER_SIZE)
             meta_data: dict = pickle.loads(raw_data)
             file_path_relative = meta_data['path']
+            if file_path_relative == 'EXIT':
+                socket_client.send(b'OK')
+                state = 0
+                continue
             file_path_absolute = os.path.join(FOLDER_RECV, file_path_relative)
             size = meta_data['size']
             atime = meta_data['atime']
@@ -261,7 +270,7 @@ def as_server(host: str, port: int):
                 with open(file_path_absolute, 'ab') as f:
                     f.close()
                 socket_client.sendall(b'OK')
-                state = 0
+                state = 2
                 # 修改文件元数据
                 os.utime(file_path_absolute, (atime, mtime))
         elif state == 3:
@@ -291,7 +300,7 @@ def as_server(host: str, port: int):
             file_size_recv = 0
             atime = 0
             mtime = 0
-            state = 0
+            state = 2
 
 
 def main():
