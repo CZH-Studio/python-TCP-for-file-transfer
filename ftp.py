@@ -257,10 +257,10 @@ def as_server(host: str, port: int):
                 state = 0
                 continue
             file_path_absolute = os.path.join(FOLDER_RECV, file_path_relative)
-            size = meta_data['size']
+            file_size = meta_data['size']
             atime = meta_data['atime']
             mtime = meta_data['mtime']
-            my_print(f"[Info] 接收:{file_path_absolute} 大小:{size}B")
+            my_print(f"[Info] 接收:{file_path_absolute} 大小:{file_size}B")
             socket_client.sendall(b'OK')
             if file_size:
                 # 如果不是空文件，则跳转到文件数据接收状态
