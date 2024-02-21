@@ -126,8 +126,8 @@ def send_file(file_path: str, socket_client: socket.socket):
         dir_list = get_dirs(file_path)
         # 为了之后能够正确读取文件，需要把根目录保存
         root_path = file_path
-        # 告诉服务器端跳转到文件夹创建状态
-        socket_client.sendall(b'DIR')
+    # 告诉服务器端跳转到文件夹创建状态
+    socket_client.sendall(b'DIR')
     # 等待服务器端状态转换完成
     socket_client.recv(BUFFER_SIZE)
 
@@ -217,9 +217,9 @@ def as_server(host: str, port: int):
     # 状态0：就绪
     state = 0
     while True:
-        raw_data = socket_client.recv(BUFFER_SIZE)
         if state == 0:
             # 就绪状态：接收EXIT（退出程序）或DIR（开始创建文件夹结构）
+            raw_data = socket_client.recv(BUFFER_SIZE)
             action = raw_data.decode()
             if action == 'EXIT':
                 # 退出程序
