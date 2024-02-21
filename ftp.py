@@ -214,6 +214,7 @@ def as_server(host: str, port: int):
     socket_client, addr = socket_server.accept()
     # 状态0：就绪
     state = 0
+    dir_list = []
     while True:
         if state == 0:
             # 就绪状态：接收EXIT（退出程序）或DIR（开始创建文件夹结构）
@@ -235,14 +236,11 @@ def as_server(host: str, port: int):
             # 接收文件夹元数据
             raw_data = socket_client.recv(BUFFER_SIZE)
             dir_list: list[dict] = pickle.loads(raw_data)
-            # 创建对应的文件夹，并指定文件夹的元数据
+            # 创建对应的文件夹
             for meta_data in dir_list:
                 dir_path_relative = meta_data['path']
                 dir_path_absolute = os.path.join(FOLDER_RECV, dir_path_relative)
-                atime = meta_data['atime']
-                mtime = meta_data['mtime']
                 os.makedirs(dir_path_absolute, exist_ok=True)
-                os.utime(dir_path_absolute, (atime, mtime))
             # 创建完成后进入文件传输状态
             socket_client.sendall(b'OK')
             state = 2
@@ -252,6 +250,14 @@ def as_server(host: str, port: int):
             meta_data: dict = pickle.loads(raw_data)
             file_path_relative = meta_data['path']
             if file_path_relative == 'EXIT':
+                # 刚才传输文件的过程中修改了文件夹的修改时间数据，现在需要修改所有文件夹的元数据
+                for meta_data in dir_list:
+                    dir_path_relative = meta_data['path']
+                    dir_path_absolute = os.path.join(FOLDER_RECV, dir_path_relative)
+                    atime = meta_data['atime']
+                    mtime = meta_data['mtime']
+                    os.utime(dir_path_absolute, (atime, mtime))
+                # 发送完成信息
                 socket_client.sendall(b'OK')
                 state = 0
                 continue
