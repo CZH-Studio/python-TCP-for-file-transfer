@@ -161,7 +161,7 @@ def send_file(file_path: str, socket_client: socket.socket):
         my_print(f"[Success] 完成发送:{file_path_absolute}", "green", True)
 
     # 这一次文件发送完成后告诉服务器端
-    meta_data_exit = {"path": "exit"}
+    meta_data_exit = {"path": "EXIT"}
     socket_client.sendall(pickle.dumps(meta_data_exit))
     socket_client.recv(BUFFER_SIZE)
 
