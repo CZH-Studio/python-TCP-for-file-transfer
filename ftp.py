@@ -66,7 +66,7 @@ def get_files(path, is_root=True) -> list[dict]:
         if os.path.isdir(file_path):
             ret.extend(get_files(file_path, False))
         else:
-            meta_data = {"path": file_path, "atime": os.path.getatime(file_path), "mtime": os.path.getmtime(file_path)}
+            meta_data = {"path": file_path, "atime": os.path.getatime(file_path), "mtime": os.path.getmtime(file_path), "size": os.path.getsize(file_path)}
             ret.append(meta_data)
     if is_root:
         # 在根目录下将所有的文件目录替换为相对于根目录的路径，而不是绝对路径
@@ -115,7 +115,7 @@ def send_file(file_path: str, socket_client: socket.socket):
         return
     if os.path.isfile(file_path):
         # 如果传进来的是个文件，则只获取这个文件的文件名，发送后保存在接受文件夹的根目录下
-        file_list = [os.path.basename(file_path)]
+        file_list = {"path": os.path.basename(file_path), "atime": os.path.getatime(file_path), "mtime": os.path.getmtime(file_path), "size": os.path.getsize(file_path)}
         root_path = os.path.dirname(file_path)
         # 此时不需要获取文件夹结构
         dir_list = []
@@ -136,19 +136,13 @@ def send_file(file_path: str, socket_client: socket.socket):
     socket_client.recv(BUFFER_SIZE)
 
     # 开始传送文件
-    for file_path_relative in file_list:
-        # file_list中保存的都是相对于根目录的路径，需要转换成绝对路径来读取文件
+    for meta_data in file_list:
+        # file_list中保存的是每一个文件的元数据
+        file_path_relative = meta_data["path"]
+        file_size: int = meta_data["size"]
         file_path_absolute = os.path.join(root_path, file_path_relative)
-        # 获取文件元数据
-        file_size = os.path.getsize(file_path_absolute)
-        file_meta_data = {
-            "path": file_path_relative,
-            "size": file_size,
-            "mtime": os.path.getmtime(file_path_absolute),
-            "ctime": os.path.getctime(file_path_absolute)
-        }
         # 发送文件元数据
-        socket_client.sendall(pickle.dumps(file_meta_data))
+        socket_client.sendall(pickle.dumps(meta_data))
         socket_client.recv(BUFFER_SIZE)
         # 发送文件内容
         my_print(f"[Info] 发送:{file_path_absolute} 大小:{file_size}B。")
